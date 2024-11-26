@@ -12,9 +12,15 @@ import { replyToGeneralInput } from "./nodes/replyToGeneralInput";
 import { rewriteCodeArtifactTheme } from "./nodes/rewriteCodeArtifactTheme";
 import { generateTitleNode } from "./nodes/generateTitle";
 import { updateHighlightedText } from "./nodes/updateHighlightedText";
+import { pineconeQuery } from "./nodes/pineconeQuery"; // Import new Pinecone node
 import { OpenCanvasGraphAnnotation } from "./state";
 
-const routeNode = (state: typeof OpenCanvasGraphAnnotation.State) => {
+const routeNode = (state: typeof OpenCanvasGraphAnnotation.State, config) => {
+  // Route to Pinecone query node if Pinecone index is configured
+  if (config.configurable?.pineconeIndex) {
+    return new Send("pineconeQuery", { ...state });
+  }
+
   if (!state.next) {
     throw new Error("'next' state field not set.");
   }
@@ -58,12 +64,14 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addNode("updateHighlightedText", updateHighlightedText)
   .addNode("generateArtifact", generateArtifact)
   .addNode("customAction", customAction)
+  .addNode("pineconeQuery", pineconeQuery) // Add new Pinecone query node
   .addNode("generateFollowup", generateFollowup)
   .addNode("cleanState", cleanState)
   .addNode("reflect", reflectNode)
   .addNode("generateTitle", generateTitleNode)
   // Initial router
   .addConditionalEdges("generatePath", routeNode, [
+    "pineconeQuery", // Add route to Pinecone query node
     "updateArtifact",
     "rewriteArtifactTheme",
     "rewriteCodeArtifactTheme",
@@ -81,6 +89,7 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addEdge("rewriteArtifactTheme", "generateFollowup")
   .addEdge("rewriteCodeArtifactTheme", "generateFollowup")
   .addEdge("customAction", "generateFollowup")
+  .addEdge("pineconeQuery", "generateFollowup") // Add edge for Pinecone flow
   // End edges
   .addEdge("replyToGeneralInput", "cleanState")
   // Only reflect if an artifact was generated/updated.

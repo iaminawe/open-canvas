@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ColorPicker } from "./color-picker";
 import { Textarea } from "../ui/textarea";
 import { InlineContextTooltip } from "../ui/inline-context-tooltip";
+import { fetchIndexes } from "@/lib/pinecone"; // Import Pinecone utility
 
 interface CreateEditAssistantDialogProps {
   open: boolean;
@@ -80,6 +81,10 @@ export function CreateEditAssistantDialog(
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [hoverTimer, setHoverTimer] = useState<NodeJS.Timeout | null>(null);
 
+  // Pinecone Index State
+  const [pineconeIndex, setPineconeIndex] = useState("");
+  const [availableIndexes, setAvailableIndexes] = useState<string[]>([]);
+
   const metadata = props.assistant?.metadata as Record<string, any> | undefined;
 
   useEffect(() => {
@@ -94,14 +99,30 @@ export function CreateEditAssistantDialog(
       setHasSelectedIcon(true);
       setIconName(metadata?.iconData?.iconName || "User");
       setIconColor(metadata?.iconData?.iconColor || "#000000");
+      setPineconeIndex(
+        metadata?.pineconeIndex || "" // Load Pinecone index if editing
+      );
     } else if (!props.isEditing) {
       setName("");
       setDescription("");
       setSystemPrompt("");
       setIconName("User");
       setIconColor("#000000");
+      setPineconeIndex(""); // Reset Pinecone index
     }
   }, [props.assistant, props.isEditing]);
+
+  useEffect(() => {
+    async function loadIndexes() {
+      try {
+        const indexes = await fetchIndexes();
+        setAvailableIndexes(indexes);
+      } catch (error) {
+        console.error("Failed to fetch Pinecone indexes:", error);
+      }
+    }
+    loadIndexes();
+  }, []);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -125,31 +146,28 @@ export function CreateEditAssistantDialog(
     props.setAllDisabled(true);
 
     let res: boolean;
+    const assistantFields: CreateAssistantFields = {
+      name,
+      description,
+      systemPrompt,
+      iconData: {
+        iconName,
+        iconColor,
+      },
+      metadata: {
+        pineconeIndex, // Include Pinecone index in metadata
+      },
+    };
+
     if (props.isEditing && props.assistant) {
       res = !!(await props.editCustomAssistant(
-        {
-          name,
-          description,
-          systemPrompt,
-          iconData: {
-            iconName,
-            iconColor,
-          },
-        },
+        assistantFields,
         props.assistant.assistant_id,
         props.userId
       ));
     } else {
       res = await props.createCustomAssistant(
-        {
-          name,
-          description,
-          systemPrompt,
-          iconData: {
-            iconName,
-            iconColor,
-          },
-        },
+        assistantFields,
         props.userId
       );
     }
@@ -176,6 +194,7 @@ export function CreateEditAssistantDialog(
     setSystemPrompt("");
     setIconName("User");
     setIconColor("#000000");
+    setPineconeIndex("");
   };
 
   if (props.isEditing && !props.assistant) {
@@ -253,6 +272,24 @@ export function CreateEditAssistantDialog(
             onChange={(e) => setSystemPrompt(e.target.value)}
             rows={5}
           />
+
+          <Label htmlFor="pinecone-index">
+            <TighterText>Pinecone Index (optional)</TighterText>
+          </Label>
+          <select
+            disabled={props.allDisabled}
+            id="pinecone-index"
+            value={pineconeIndex}
+            onChange={(e) => setPineconeIndex(e.target.value)}
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          >
+            <option value="">Select Index</option>
+            {availableIndexes.map((index) => (
+              <option key={index} value={index}>
+                {index}
+              </option>
+            ))}
+          </select>
 
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex flex-col gap-4 items-start justify-start w-full">
