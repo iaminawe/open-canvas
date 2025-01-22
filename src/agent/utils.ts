@@ -143,6 +143,8 @@ export const getModelConfig = (
     azureOpenAIApiVersion: string;
     azureOpenAIBasePath?: string;
   };
+  apiKey?: string;
+  baseUrl?: string;
 } => {
   const customModelName = config.configurable?.customModelName as string;
   if (!customModelName) {
@@ -171,24 +173,36 @@ export const getModelConfig = (
     return {
       modelName: customModelName,
       modelProvider: "openai",
+      apiKey: process.env.OPENAI_API_KEY,
     };
   }
   if (customModelName.includes("claude-")) {
     return {
       modelName: customModelName,
       modelProvider: "anthropic",
+      apiKey: process.env.ANTHROPIC_API_KEY,
     };
   }
   if (customModelName.includes("fireworks/")) {
     return {
       modelName: customModelName,
       modelProvider: "fireworks",
+      apiKey: process.env.FIREWORKS_API_KEY,
     };
   }
   if (customModelName.includes("gemini-")) {
     return {
       modelName: customModelName,
       modelProvider: "google-genai",
+      apiKey: process.env.GOOGLE_API_KEY,
+    };
+  }
+  if (customModelName.startsWith("ollama-")) {
+    return {
+      modelName: customModelName.replace("ollama-", ""),
+      modelProvider: "ollama",
+      baseUrl:
+        process.env.OLLAMA_API_URL || "http://host.docker.internal:11434",
     };
   }
 
@@ -209,11 +223,15 @@ export async function getModelFromConfig(
   }
 ) {
   const { temperature = 0.5, maxTokens } = extra || {};
-  const { modelName, modelProvider, azureConfig } = getModelConfig(config);
+  const { modelName, modelProvider, azureConfig, apiKey, baseUrl } =
+    getModelConfig(config);
+
   return await initChatModel(modelName, {
     modelProvider,
-    temperature,
     maxTokens,
+    temperature,
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(apiKey ? { apiKey } : {}),
     ...(azureConfig != null
       ? {
           azureOpenAIApiKey: azureConfig.azureOpenAIApiKey,
